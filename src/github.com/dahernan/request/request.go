@@ -53,7 +53,7 @@ func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejs
 	}
 	clientReq, _ := http.NewRequest(method, url, bytes.NewReader(requestBytes))
 
-	clientReq.Header.Add("Content-Type", "application/json")
+	clientReq.Header.Add("Accept", "application/json")
 	response, error := r.httpClient.Do(clientReq)
 	defer response.Body.Close()
 
