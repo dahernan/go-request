@@ -53,6 +53,7 @@ func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejs
 	}
 	clientReq, _ := http.NewRequest(method, url, bytes.NewReader(requestBytes))
 
+	clientReq.Header.Add("Content-Type", "application/json")
 	clientReq.Header.Add("Accept", "application/json")
 	response, error := r.httpClient.Do(clientReq)
 	defer response.Body.Close()
@@ -68,6 +69,7 @@ func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejs
 		return nil, error
 	}
 
+	//response.StatusStatusCode
 	if !(response.StatusCode >= 200 && response.StatusCode <= 299) {
 		return nil, fmt.Errorf("Error on response for the url %s, with message,\n\t%s\n\t%s", url, response.Status, body)
 	}

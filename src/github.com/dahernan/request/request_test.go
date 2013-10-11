@@ -30,6 +30,7 @@ func RequestSpec(c gospec.Context) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			c.Expect(req.Method, Equals, "POST")
 			c.Expect(req.URL.String(), Equals, "/hello/world")
+			c.Expect(req.Header.Get("Content-Type"), Equals, "application/json")
 			c.Expect(req.Header.Get("Accept"), Equals, "application/json")
 
 			body, error := ioutil.ReadAll(req.Body)
