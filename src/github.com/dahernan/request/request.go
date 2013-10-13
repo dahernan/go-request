@@ -12,11 +12,11 @@ import (
 )
 
 type Request interface {
-	Do(method string, endpoint string, requestBody *simplejson.Json) (json *simplejson.Json, err error)
-	Get(endpoint string) (json *simplejson.Json, err error)
-	Post(endpoint string, requestBody *simplejson.Json) (json *simplejson.Json, err error)
-	Put(endpoint string, requestBody *simplejson.Json) (json *simplejson.Json, err error)
-	Delete(endpoint string, requestBody *simplejson.Json) (json *simplejson.Json, err error)
+	Do(method string, endpoint string, requestBody *simplejson.Json) (response *Response, err error)
+	Get(endpoint string) (response *Response, err error)
+	Post(endpoint string, requestBody *simplejson.Json) (response *Response, err error)
+	Put(endpoint string, requestBody *simplejson.Json) (response *Response, err error)
+	Delete(endpoint string, requestBody *simplejson.Json) (response *Response, err error)
 }
 
 type RequestClient struct {
@@ -24,27 +24,32 @@ type RequestClient struct {
 	baseUrl    string
 }
 
+type Response struct {
+	Json       *simplejson.Json
+	StatusCode int
+}
+
 func NewRequest(baseUrl string) Request {
 	return &RequestClient{baseUrl: baseUrl, httpClient: &http.Client{}}
 }
 
-func (r *RequestClient) Get(endpoint string) (*simplejson.Json, error) {
+func (r *RequestClient) Get(endpoint string) (*Response, error) {
 	return r.Do("GET", endpoint, nil)
 }
 
-func (r *RequestClient) Post(endpoint string, requestBody *simplejson.Json) (*simplejson.Json, error) {
+func (r *RequestClient) Post(endpoint string, requestBody *simplejson.Json) (*Response, error) {
 	return r.Do("POST", endpoint, requestBody)
 }
 
-func (r *RequestClient) Put(endpoint string, requestBody *simplejson.Json) (*simplejson.Json, error) {
+func (r *RequestClient) Put(endpoint string, requestBody *simplejson.Json) (*Response, error) {
 	return r.Do("PUT", endpoint, requestBody)
 }
 
-func (r *RequestClient) Delete(endpoint string, requestBody *simplejson.Json) (*simplejson.Json, error) {
+func (r *RequestClient) Delete(endpoint string, requestBody *simplejson.Json) (*Response, error) {
 	return r.Do("DELETE", endpoint, requestBody)
 }
 
-func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejson.Json) (*simplejson.Json, error) {
+func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejson.Json) (*Response, error) {
 	url := r.baseUrl + endpoint
 
 	requestBytes := make([]byte, 0)
@@ -69,12 +74,17 @@ func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejs
 		return nil, error
 	}
 
-	//response.StatusStatusCode
-	if !(response.StatusCode >= 200 && response.StatusCode <= 299) {
-		return nil, fmt.Errorf("Error on response for the url %s, with message,\n\t%s\n\t%s", url, response.Status, body)
+	json, _ := simplejson.NewJson(body)
+	// client errors
+	if response.StatusCode >= 400 && response.StatusCode <= 499 {
+		error := fmt.Errorf("Error on response for the url %s, with message,\n\t%s\n\t%s", url, response.Status, body)
+		return &Response{Json: json, StatusCode: response.StatusCode}, error
 	}
 
-	json, _ := simplejson.NewJson(body)
+	// server errors
+	if response.StatusCode >= 500 && response.StatusCode <= 599 {
+		return &Response{Json: nil, StatusCode: response.StatusCode}, fmt.Errorf("Error on response for the url %s, with message,\n\t%s\n\t%s", url, response.Status, body)
+	}
 
-	return json, nil
+	return &Response{Json: json, StatusCode: response.StatusCode}, nil
 }

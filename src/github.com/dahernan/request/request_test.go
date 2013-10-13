@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"encoding/json"
-	"fmt"
+	//"fmt"
 	simplejson "github.com/bitly/go-simplejson"
 	"io/ioutil"
 	"net/http"
@@ -22,8 +22,8 @@ var _ = Describe("Request", func() {
 			defer ts.Close()
 			request := NewRequest(url)
 
-			body, _ := request.Get("/")
-			Expect(body.Get("message").MustString()).To(Equal("hello"))
+			response, _ := request.Get("/")
+			Expect(response.Json.Get("message").MustString()).To(Equal("hello"))
 		})
 
 		It("can do a POST", func() {
@@ -52,10 +52,10 @@ var _ = Describe("Request", func() {
 			jsonObject, _ := simplejson.NewJson(jsonBytes)
 
 			// method to test
-			body, error := request.Post("/hello/world", jsonObject)
+			response, error := request.Post("/hello/world", jsonObject)
 
 			Expect(error).To(BeNil())
-			ok, error := body.Get("ok").Bool()
+			ok, error := response.Json.Get("ok").Bool()
 			Expect(error).To(BeNil())
 			Expect(ok).To(BeTrue())
 		})
@@ -75,10 +75,10 @@ var _ = Describe("Request", func() {
 			jsonObject, _ := simplejson.NewJson(jsonBytes)
 
 			// method to test
-			body, error := request.Put("/hello/a/put", jsonObject)
+			response, error := request.Put("/hello/a/put", jsonObject)
 
 			Expect(error).To(BeNil())
-			ok, error := body.Get("ok").Bool()
+			ok, error := response.Json.Get("ok").Bool()
 			Expect(error).To(BeNil())
 			Expect(ok).To(BeTrue())
 
@@ -99,10 +99,10 @@ var _ = Describe("Request", func() {
 			jsonObject, _ := simplejson.NewJson(jsonBytes)
 
 			// method to test
-			body, error := request.Delete("/hello/delete", jsonObject)
+			response, error := request.Delete("/hello/delete", jsonObject)
 
 			Expect(error).To(BeNil())
-			ok, error := body.Get("ok").Bool()
+			ok, error := response.Json.Get("ok").Bool()
 			Expect(error).To(BeNil())
 			Expect(ok).To(BeTrue())
 
@@ -110,18 +110,49 @@ var _ = Describe("Request", func() {
 
 	})
 
-	Describe("Handle errors", func() {
+	Describe("Handle client errors", func() {
 		It("should hanlde a 404", func() {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				Expect(req.Method).To(Equal("GET"))
 				sendNotFound(w)
 			}))
 			url := ts.URL
 			defer ts.Close()
 			request := NewRequest(url)
-			body, error := request.Get("/")
-			fmt.Printf("Body: %s Error %s", body, error)
-			Expect(body.Get("exists").MustString()).To(Equal("false"))
+			response, error := request.Get("/")
+			//fmt.Printf("Error: %s", error)
+			Expect(response.StatusCode).To(Equal(404))
+			ok, error := response.Json.Get("exists").Bool()
+			Expect(error).To(BeNil())
+			Expect(ok).To(BeFalse())
+		})
+
+		It("should hanlde a 400", func() {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				sendBadRequest(w)
+			}))
+			url := ts.URL
+			defer ts.Close()
+			request := NewRequest(url)
+			response, _ := request.Get("/")
+			Expect(response.StatusCode).To(Equal(400))
+			Expect(response.Json.Get("error").MustString()).To(Equal("Bad request error"))
+		})
+
+	})
+
+	Describe("Handle server errors", func() {
+		It("should hanlde a 500", func() {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Error on the server"))
+
+			}))
+			url := ts.URL
+			defer ts.Close()
+			request := NewRequest(url)
+			response, error := request.Get("/")
+			Expect(response.StatusCode).To(Equal(500))
+			Expect(error).NotTo(BeNil())
 		})
 
 	})
@@ -146,12 +177,19 @@ func sendOK(w http.ResponseWriter) {
 }
 
 func sendNotFound(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusBadRequest)
+	w.WriteHeader(http.StatusNotFound)
 	jsonMap := make(map[string]interface{})
 	jsonMap["exists"] = false
 	jsonBytes, _ := json.Marshal(jsonMap)
 	writeJsonBytes(w, jsonBytes)
+}
 
+func sendBadRequest(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusBadRequest)
+	jsonMap := make(map[string]interface{})
+	jsonMap["error"] = "Bad request error"
+	jsonBytes, _ := json.Marshal(jsonMap)
+	writeJsonBytes(w, jsonBytes)
 }
 
 func writeJsonBytes(w http.ResponseWriter, jsonBytes []byte) {
