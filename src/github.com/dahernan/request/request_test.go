@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"encoding/json"
-	//"fmt"
+	"fmt"
 	simplejson "github.com/bitly/go-simplejson"
 	"io/ioutil"
 	"net/http"
@@ -133,9 +133,11 @@ var _ = Describe("Request", func() {
 			url := ts.URL
 			defer ts.Close()
 			request := NewRequest(url)
-			response, _ := request.Get("/")
+			response, error := request.Get("/")
+			fmt.Println(error)
 			Expect(response.StatusCode).To(Equal(400))
 			Expect(response.Json.Get("error").MustString()).To(Equal("Bad request error"))
+
 		})
 
 	})
@@ -152,6 +154,35 @@ var _ = Describe("Request", func() {
 			request := NewRequest(url)
 			response, error := request.Get("/")
 			Expect(response.StatusCode).To(Equal(500))
+			Expect(error).NotTo(BeNil())
+			fmt.Println(error)
+
+		})
+
+	})
+
+	Describe("Handle Json marshalling errors", func() {
+		It("should hanlde non json document as an error", func() {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				writeJsonBytes(w, []byte("bad json document"))
+			}))
+			url := ts.URL
+			defer ts.Close()
+			request := NewRequest(url)
+			response, error := request.Get("/")
+			fmt.Println(error)
+			Expect(response.Json).To(BeNil())
+			Expect(error).NotTo(BeNil())
+		})
+
+	})
+
+	Describe("Handle url errors", func() {
+		It("should hanlde malformed urls", func() {
+			request := NewRequest("wrong")
+			response, error := request.Get("/")
+			fmt.Println(error)
+			Expect(response).To(BeNil())
 			Expect(error).NotTo(BeNil())
 		})
 
