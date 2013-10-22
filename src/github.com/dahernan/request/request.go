@@ -6,8 +6,9 @@ import (
 	"fmt"
 	simplejson "github.com/bitly/go-simplejson"
 	"io/ioutil"
-	//"log"
+	"net"
 	"net/http"
+	"time"
 )
 
 type Request interface {
@@ -30,6 +31,25 @@ type Response struct {
 
 func NewRequest(baseUrl string) Request {
 	return &RequestClient{baseUrl: baseUrl, httpClient: &http.Client{}}
+}
+
+func NewRequestWithClient(baseUrl string, client *http.Client) Request {
+	return &RequestClient{baseUrl: baseUrl, httpClient: client}
+}
+
+func NewRequestWithTimeout(baseUrl string, timeout time.Duration) Request {
+	dialTimeout := func(network, addr string) (net.Conn, error) {
+		return net.DialTimeout(network, addr, timeout)
+	}
+
+	transport := http.Transport{
+		Dial: dialTimeout,
+	}
+	client := http.Client{
+		Transport: &transport,
+	}
+
+	return &RequestClient{baseUrl: baseUrl, httpClient: &client}
 }
 
 func (r *RequestClient) Get(endpoint string) (*Response, error) {
@@ -70,34 +90,36 @@ func (r *RequestClient) Do(method string, endpoint string, requestBody *simplejs
 	clientReq.Header.Add("Content-Type", "application/json")
 	clientReq.Header.Add("Accept", "application/json")
 	response, error := r.httpClient.Do(clientReq)
+	status := ""
 	if response != nil {
 		defer response.Body.Close()
+		status = response.Status
 	}
 	if error != nil {
-		error := fmt.Errorf("ERROR: [%s|%s]: %s\n", method, url, error)
+		error := fmt.Errorf("ERROR: [%s|%s]- [%s]: %s\n", method, url, status, error)
 		return nil, error
 	}
 
 	body, error := ioutil.ReadAll(response.Body)
 	if error != nil {
-		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: Reading the body: %s\n", method, url, response.Status, error)
+		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: Reading the body: %s\n", method, url, status, error)
 		return nil, error
 	}
 
 	json, error := simplejson.NewJson(body)
 	if error != nil {
-		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: marshalling json response: %s\nBody--------\n%s\n------------\n", method, url, response.Status, error, body)
+		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: marshalling json response: %s\nBody--------\n%s\n------------\n", method, url, status, error, body)
 		return &Response{Json: nil, StatusCode: response.StatusCode}, error
 	}
 	// client errors
 	if response.StatusCode >= 400 && response.StatusCode <= 499 {
-		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: on the resquest \nBody--------\n%s\n------------\n", method, url, response.Status, body)
+		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: on the resquest \nBody--------\n%s\n------------\n", method, url, status, body)
 		return &Response{Json: json, StatusCode: response.StatusCode}, error
 	}
 
 	// server errors
 	if response.StatusCode >= 500 && response.StatusCode <= 599 {
-		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: on the server: %s\nBody--------\n%s\n------------\n", method, url, response.Status, error, body)
+		error := fmt.Errorf("ERROR: [%s|%s] - [%s]: on the server: %s\nBody--------\n%s\n------------\n", method, url, status, error, body)
 		return &Response{Json: nil, StatusCode: response.StatusCode}, error
 	}
 
