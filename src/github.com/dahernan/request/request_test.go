@@ -145,9 +145,7 @@ var _ = Describe("Request", func() {
 	Describe("Handle server errors", func() {
 		It("should hanlde a 500", func() {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Error on the server"))
-
+				sendInternalServerError(w)
 			}))
 			url := ts.URL
 			defer ts.Close()
@@ -219,6 +217,14 @@ func sendBadRequest(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusBadRequest)
 	jsonMap := make(map[string]interface{})
 	jsonMap["error"] = "Bad request error"
+	jsonBytes, _ := json.Marshal(jsonMap)
+	writeJsonBytes(w, jsonBytes)
+}
+
+func sendInternalServerError(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusInternalServerError)
+	jsonMap := make(map[string]interface{})
+	jsonMap["error"] = "Internal Server Error"
 	jsonBytes, _ := json.Marshal(jsonMap)
 	writeJsonBytes(w, jsonBytes)
 }
